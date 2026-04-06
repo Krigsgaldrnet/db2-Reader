@@ -931,12 +931,26 @@ class Reader
         unset($fieldAttributes);
 
         $this->recordOffsets = [];
-        if ($hotfixVersion < 7) {
-            $recordHeaderSize = 4 * 7;
-            $unpackFormat = 'a4magic/Vunk1/Vunk2/Vsize/Vtable/Vid/Vunk3';
-        } else {
-            $recordHeaderSize = 4 * 6;
-            $unpackFormat = 'a4magic/Vunk1/Vtable/Vid/Vsize/Vunk2';
+        switch ($hotfixVersion) {
+            case 5:
+            case 6:
+                $recordHeaderSize = 4 * 7;
+                $unpackFormat = 'a4magic/Vunk1/Vunk2/Vsize/Vtable/Vid/Vunk3';
+                break;
+
+            case 7:
+            case 8: // Only the "old" version 8
+                $recordHeaderSize = 4 * 6;
+                $unpackFormat = 'a4magic/Vunk1/Vtable/Vid/Vsize/Vunk2';
+                break;
+
+            case 9:
+                $recordHeaderSize = 4 * 8;
+                $unpackFormat = 'a4magic/lregion/lindex/Vunique/Vtable/Vid/Vsize/Vstatus';
+                break;
+
+            default:
+                throw new \Exception('Unexpected hotfix file version: %d', $hotfixVersion);
         }
 
         while (ftell($this->fileHandle) + $recordHeaderSize < $this->fileSize) {
