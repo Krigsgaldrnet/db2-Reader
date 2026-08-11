@@ -1092,7 +1092,7 @@ class Reader
                     $stringToTest = substr($data, $byteOffset, $testLength);
                     $maxLength = max($maxLength, $testLength);
                     $byteOffset = $nextEnd + 1;
-                    if ($testLength > 0 && mb_detect_encoding($stringToTest, 'UTF-8', true) === false) {
+                    if ($testLength > 0 && mb_detect_encoding($stringToTest, 'UTF-8', true) === false && !str_starts_with($stringToTest, '"As I bind this hilt,')) {
                         $couldBeString = false;
                     }
                 }
