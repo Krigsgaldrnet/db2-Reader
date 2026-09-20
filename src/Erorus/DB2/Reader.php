@@ -695,7 +695,6 @@ class Reader
         }
 
         $commonBlockPointer = 0;
-        $palletBlockPointer = 0;
 
         fseek($this->fileHandle, $this->fieldStorageInfoPos);
         $storageInfoFormat = 'voffsetBits/vsizeBits/VadditionalDataSize/VstorageType/VbitpackOffsetBits/VbitpackSizeBits/VarrayCount';
@@ -728,17 +727,9 @@ class Reader
                     break;
                 case static::FIELD_COMPRESSION_BITPACKED_INDEXED:
                 case static::FIELD_COMPRESSION_BITPACKED_INDEXED_ARRAY:
-                    // Warning: may mis-identify floats as being 3 bytes if that top byte is always the same.
-                    $this->recordFormat[$fieldId]['size'] = static::guessPalletFieldSize($palletBlockPointer, $parts['additionalDataSize']);
-                    $this->recordFormat[$fieldId]['type'] =
-                        $this->recordFormat[$fieldId]['size'] == 4 ?
-                            static::guessPalletFieldType($palletBlockPointer, $parts['additionalDataSize']) :
-                            static::FIELD_TYPE_INT;
                     $this->recordFormat[$fieldId]['offset'] = (int)floor($parts['offsetBits'] / 8);
                     $this->recordFormat[$fieldId]['valueLength'] = (int)ceil(($parts['offsetBits'] + $parts['sizeBits']) / 8) - $this->recordFormat[$fieldId]['offset'] + 1;
                     $this->recordFormat[$fieldId]['valueCount'] = $parts['arrayCount'] > 0 ? $parts['arrayCount'] : 1;
-                    $parts['blockOffset'] = $palletBlockPointer;
-                    $palletBlockPointer += $parts['additionalDataSize'];
                     break;
                 case static::FIELD_COMPRESSION_NONE:
                     if ($parts['arrayCount'] > 0) {
@@ -751,6 +742,28 @@ class Reader
 
             $this->recordFormat[$fieldId]['storage'] = $parts;
         }
+
+        // Pallet data is stored as all scalars first, then all arrays, so we need to assign the block offsets that way.
+        $palletStorageTypes = [
+            static::FIELD_COMPRESSION_BITPACKED_INDEXED,
+            static::FIELD_COMPRESSION_BITPACKED_INDEXED_ARRAY,
+        ];
+        $palletBlockPointer = 0;
+        foreach ($palletStorageTypes as $storageType) {
+            for ($fieldId = 0; $fieldId < $this->fieldCount; $fieldId++) {
+                $storageInfo = &$this->recordFormat[$fieldId]['storage'];
+                if ($storageInfo['storageType'] === $storageType) {
+                    // Warning: may mis-identify floats as being 3 bytes if that top byte is always the same.
+                    $this->recordFormat[$fieldId]['size'] = $this->guessPalletFieldSize($palletBlockPointer, $storageInfo['additionalDataSize']);
+                    $this->recordFormat[$fieldId]['type'] = $this->recordFormat[$fieldId]['size'] === 4 ?
+                        $this->guessPalletFieldType($palletBlockPointer, $storageInfo['additionalDataSize']) :
+                        static::FIELD_TYPE_INT;
+                    $storageInfo['blockOffset'] = $palletBlockPointer;
+                    $palletBlockPointer += $storageInfo['additionalDataSize'];
+                }
+            }
+        }
+        unset($storageInfo);
 
         if (!$this->hasIdBlock) {
             if ($this->idField >= $this->fieldCount) {
